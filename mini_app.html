@@ -1,0 +1,579 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Music Bot</title>
+<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@300;400;500;600;700;900&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:        #0a0a0a;
+    --surface:   #141414;
+    --card:      #1a1a1a;
+    --border:    #2a2a2a;
+    --green:     #1db954;
+    --green-dim: #158a3e;
+    --text:      #ffffff;
+    --muted:     #a0a0a0;
+    --dim:       #505050;
+    --yt:        #ff4444;
+    --sc:        #ff5500;
+    --radius:    14px;
+    --tab-h:     64px;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+  html, body {
+    height: 100%; width: 100%;
+    background: var(--bg);
+    font-family: 'Figtree', sans-serif;
+    color: var(--text);
+    overflow: hidden;
+  }
+
+  /* ── Layout ── */
+  #app {
+    display: flex; flex-direction: column;
+    height: 100vh; height: 100dvh;
+  }
+
+  .screen {
+    flex: 1; overflow-y: auto; overflow-x: hidden;
+    padding: 16px 16px calc(var(--tab-h) + 16px);
+    display: none;
+  }
+  .screen.active { display: block; }
+
+  /* ── Tabs ── */
+  .tabs {
+    position: fixed; bottom: 0; left: 0; right: 0;
+    height: var(--tab-h);
+    background: rgba(10,10,10,0.95);
+    backdrop-filter: blur(20px);
+    border-top: 1px solid var(--border);
+    display: flex; align-items: center;
+    z-index: 100;
+  }
+  .tab {
+    flex: 1; display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    gap: 4px; cursor: pointer;
+    color: var(--dim); transition: color .2s;
+    padding: 8px 0;
+  }
+  .tab.active { color: var(--green); }
+  .tab svg { width: 22px; height: 22px; }
+  .tab span { font-size: 10px; font-weight: 600; letter-spacing: .5px; text-transform: uppercase; }
+
+  /* ── Source Selector ── */
+  .source-bar {
+    display: flex; gap: 8px; margin-bottom: 20px;
+  }
+  .source-btn {
+    flex: 1; padding: 10px 0; border-radius: 50px;
+    border: 1.5px solid var(--border);
+    background: transparent; color: var(--muted);
+    font-family: inherit; font-size: 13px; font-weight: 600;
+    cursor: pointer; transition: all .2s;
+    display: flex; align-items: center; justify-content: center; gap: 6px;
+  }
+  .source-btn.active-yt  { border-color: var(--yt);  background: rgba(255,68,68,.12);  color: var(--yt); }
+  .source-btn.active-sc  { border-color: var(--sc);  background: rgba(255,85,0,.12);   color: var(--sc); }
+  .source-btn .dot { width: 7px; height: 7px; border-radius: 50%; }
+  .source-btn.active-yt .dot { background: var(--yt); }
+  .source-btn.active-sc .dot { background: var(--sc); }
+
+  /* ── Search ── */
+  .search-wrap {
+    position: relative; margin-bottom: 20px;
+  }
+  .search-wrap svg {
+    position: absolute; left: 14px; top: 50%; transform: translateY(-50%);
+    width: 18px; height: 18px; color: var(--dim);
+  }
+  #search-input {
+    width: 100%; padding: 13px 14px 13px 42px;
+    background: var(--card); border: 1.5px solid var(--border);
+    border-radius: 50px; color: var(--text);
+    font-family: inherit; font-size: 15px;
+    outline: none; transition: border-color .2s;
+  }
+  #search-input::placeholder { color: var(--dim); }
+  #search-input:focus { border-color: var(--green); }
+
+  /* ── Section title ── */
+  .section-title {
+    font-size: 11px; font-weight: 700; letter-spacing: 1.5px;
+    text-transform: uppercase; color: var(--dim);
+    margin-bottom: 12px;
+  }
+
+  /* ── Track card ── */
+  .track-list { display: flex; flex-direction: column; gap: 2px; }
+
+  .track-item {
+    display: flex; align-items: center; gap: 12px;
+    padding: 10px 12px; border-radius: 10px;
+    cursor: pointer; transition: background .15s;
+    position: relative; overflow: hidden;
+  }
+  .track-item:active { background: var(--border); }
+  .track-item:hover  { background: var(--card); }
+
+  .track-thumb {
+    width: 48px; height: 48px; border-radius: 8px;
+    background: var(--card); flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    overflow: hidden; position: relative;
+  }
+  .track-thumb img { width: 100%; height: 100%; object-fit: cover; }
+  .track-thumb .play-icon {
+    position: absolute; inset: 0;
+    display: flex; align-items: center; justify-content: center;
+    background: rgba(0,0,0,.5); opacity: 0; transition: opacity .15s;
+  }
+  .track-item:hover .play-icon { opacity: 1; }
+  .track-thumb svg { width: 20px; height: 20px; color: #fff; }
+
+  .track-info { flex: 1; min-width: 0; }
+  .track-name {
+    font-size: 14px; font-weight: 600;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    margin-bottom: 3px;
+  }
+  .track-meta {
+    font-size: 12px; color: var(--muted);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .track-duration { color: var(--dim); font-size: 11px; }
+
+  .track-actions { display: flex; gap: 4px; flex-shrink: 0; }
+  .icon-btn {
+    width: 34px; height: 34px; border-radius: 50%;
+    border: none; background: transparent;
+    color: var(--muted); cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    transition: all .15s;
+  }
+  .icon-btn:hover { background: var(--border); color: var(--text); }
+  .icon-btn.added { color: var(--green); }
+  .icon-btn svg { width: 18px; height: 18px; }
+
+  /* ── Source badge ── */
+  .badge {
+    font-size: 9px; font-weight: 700; letter-spacing: .5px;
+    padding: 2px 6px; border-radius: 4px; text-transform: uppercase;
+  }
+  .badge-yt { background: rgba(255,68,68,.2);  color: var(--yt); }
+  .badge-sc { background: rgba(255,85,0,.2);   color: var(--sc); }
+
+  /* ── Empty state ── */
+  .empty {
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    padding: 48px 24px; gap: 12px; text-align: center;
+  }
+  .empty svg { width: 48px; height: 48px; color: var(--dim); opacity: .5; }
+  .empty p { color: var(--muted); font-size: 14px; line-height: 1.5; }
+  .empty strong { color: var(--text); }
+
+  /* ── Loading ── */
+  .loading {
+    display: flex; align-items: center; justify-content: center;
+    gap: 8px; padding: 32px; color: var(--muted);
+  }
+  .spinner {
+    width: 20px; height: 20px; border: 2px solid var(--border);
+    border-top-color: var(--green); border-radius: 50%;
+    animation: spin .8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── Toast ── */
+  #toast {
+    position: fixed; bottom: calc(var(--tab-h) + 12px); left: 50%; transform: translateX(-50%) translateY(80px);
+    background: var(--green); color: #000;
+    font-size: 13px; font-weight: 700;
+    padding: 10px 20px; border-radius: 50px;
+    z-index: 999; transition: transform .3s cubic-bezier(.34,1.56,.64,1);
+    white-space: nowrap; pointer-events: none;
+  }
+  #toast.show { transform: translateX(-50%) translateY(0); }
+
+  /* ── Playlist ── */
+  .playlist-header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 16px;
+  }
+  .playlist-count {
+    font-size: 13px; color: var(--muted);
+  }
+  .clear-btn {
+    font-size: 12px; font-weight: 600; color: var(--dim);
+    background: none; border: none; cursor: pointer;
+    font-family: inherit; transition: color .15s;
+    padding: 4px 8px;
+  }
+  .clear-btn:hover { color: #ff4444; }
+
+  /* ── Header ── */
+  .page-header { margin-bottom: 20px; }
+  .page-title { font-size: 26px; font-weight: 900; letter-spacing: -0.5px; }
+  .page-sub { font-size: 13px; color: var(--muted); margin-top: 4px; }
+
+  /* ── Scrollbar ── */
+  .screen::-webkit-scrollbar { width: 0; }
+
+  /* ── Waveform anim (playing indicator) ── */
+  @keyframes wave {
+    0%, 100% { transform: scaleY(1); }
+    50%       { transform: scaleY(2.2); }
+  }
+  .wave-bars {
+    display: flex; gap: 2px; align-items: center; height: 16px;
+  }
+  .wave-bars span {
+    display: block; width: 3px; background: var(--green);
+    border-radius: 2px; animation: wave .8s ease-in-out infinite;
+  }
+  .wave-bars span:nth-child(2) { animation-delay: .15s; }
+  .wave-bars span:nth-child(3) { animation-delay: .3s; }
+
+  /* ── Download btn ── */
+  .dl-btn {
+    display: flex; align-items: center; gap: 6px;
+    padding: 10px 18px; border-radius: 50px;
+    background: var(--green); color: #000;
+    font-family: inherit; font-size: 13px; font-weight: 700;
+    border: none; cursor: pointer; transition: all .15s;
+    flex-shrink: 0;
+  }
+  .dl-btn:hover { background: #1ed760; }
+  .dl-btn:active { transform: scale(.95); }
+  .dl-btn svg { width: 15px; height: 15px; }
+</style>
+</head>
+<body>
+<div id="app">
+
+  <!-- ── SEARCH SCREEN ── -->
+  <div class="screen active" id="screen-search">
+    <div class="page-header">
+      <div class="page-title">Поиск</div>
+      <div class="page-sub">Найди и скачай любой трек</div>
+    </div>
+
+    <div class="source-bar">
+      <button class="source-btn active-yt" id="btn-yt" onclick="setSource('yt')">
+        <span class="dot"></span> YouTube
+      </button>
+      <button class="source-btn" id="btn-sc" onclick="setSource('sc')">
+        <span class="dot"></span> SoundCloud
+      </button>
+    </div>
+
+    <div class="search-wrap">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+      </svg>
+      <input id="search-input" type="text" placeholder="Исполнитель, название..." autocomplete="off"
+             onkeydown="if(event.key==='Enter') doSearch()">
+    </div>
+
+    <div id="search-results"></div>
+  </div>
+
+  <!-- ── PLAYLIST SCREEN ── -->
+  <div class="screen" id="screen-playlist">
+    <div class="playlist-header">
+      <div>
+        <div class="page-title">Плейлист</div>
+        <div class="playlist-count" id="pl-count">0 треков</div>
+      </div>
+      <button class="clear-btn" onclick="clearPlaylist()">Очистить</button>
+    </div>
+    <div id="playlist-list"></div>
+  </div>
+
+  <!-- ── TABS ── -->
+  <nav class="tabs">
+    <div class="tab active" id="tab-search" onclick="switchTab('search')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+      </svg>
+      <span>Поиск</span>
+    </div>
+    <div class="tab" id="tab-playlist" onclick="switchTab('playlist')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/>
+        <line x1="8" y1="18" x2="21" y2="18"/>
+        <line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/>
+        <line x1="3" y1="18" x2="3.01" y2="18"/>
+      </svg>
+      <span>Плейлист</span>
+    </div>
+  </nav>
+</div>
+
+<div id="toast"></div>
+
+<script>
+// ── State ──────────────────────────────────────
+const tg = window.Telegram?.WebApp;
+tg?.ready();
+tg?.expand();
+tg?.setHeaderColor?.('#0a0a0a');
+tg?.setBackgroundColor?.('#0a0a0a');
+
+let source    = 'yt';
+let results   = [];
+let playlist  = JSON.parse(localStorage.getItem('playlist') || '[]');
+let searching = false;
+
+// ── Helpers ────────────────────────────────────
+function fmt(sec) {
+  const m = Math.floor(sec / 60), s = sec % 60;
+  return `${m}:${s.toString().padStart(2,'0')}`;
+}
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2200);
+}
+
+function savePlaylist() {
+  localStorage.setItem('playlist', JSON.stringify(playlist));
+}
+
+function thumb(track) {
+  return track.thumbnail
+    ? `<img src="${track.thumbnail}" onerror="this.style.display='none'">`
+    : `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:22px;height:22px;color:var(--dim)"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>`;
+}
+
+function isInPlaylist(id) {
+  return playlist.some(t => t.id === id);
+}
+
+// ── Source ─────────────────────────────────────
+function setSource(s) {
+  source = s;
+  document.getElementById('btn-yt').className = 'source-btn' + (s==='yt' ? ' active-yt' : '');
+  document.getElementById('btn-sc').className = 'source-btn' + (s==='sc' ? ' active-sc' : '');
+  if (document.getElementById('search-input').value.trim()) doSearch();
+}
+
+// ── Tabs ───────────────────────────────────────
+function switchTab(name) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('screen-' + name).classList.add('active');
+  document.getElementById('tab-' + name).classList.add('active');
+  if (name === 'playlist') renderPlaylist();
+}
+
+// ── Search ─────────────────────────────────────
+async function doSearch() {
+  const q = document.getElementById('search-input').value.trim();
+  if (!q || searching) return;
+  searching = true;
+
+  const wrap = document.getElementById('search-results');
+  wrap.innerHTML = '<div class="loading"><div class="spinner"></div> Ищу треки...</div>';
+
+  // Отправляем запрос боту через Telegram WebApp
+  if (tg) {
+    tg.sendData(JSON.stringify({ action: 'search', query: q, source }));
+  }
+
+  // Симуляция результатов для демо (в реальности данные придут от бота)
+  setTimeout(() => {
+    results = generateDemo(q, source);
+    renderResults();
+    searching = false;
+  }, 900);
+}
+
+function generateDemo(q, src) {
+  const names = [
+    [q, 'Popular Artist'],
+    [q + ' - Official', 'Music Channel'],
+    ['The Best of ' + q, 'DJ Compilation'],
+    [q + ' (Live)', 'Concert Recording'],
+    [q + ' Remix', 'Remix Artist'],
+  ];
+  return names.map((n, i) => ({
+    id: src + '_demo_' + i,
+    title: n[0],
+    uploader: n[1],
+    duration: 180 + i * 37,
+    source: src,
+    thumbnail: null,
+    url: '#demo',
+  }));
+}
+
+function renderResults() {
+  const wrap = document.getElementById('search-results');
+  if (!results.length) {
+    wrap.innerHTML = `<div class="empty">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+      <p>Ничего не найдено.<br><strong>Попробуй другой запрос</strong></p>
+    </div>`;
+    return;
+  }
+
+  wrap.innerHTML = `<div class="section-title">${results.length} результатов</div>
+    <div class="track-list">${results.map(trackCard).join('')}</div>`;
+}
+
+function trackCard(track, i) {
+  const inPl = isInPlaylist(track.id);
+  const badge = `<span class="badge badge-${track.source}">${track.source === 'yt' ? 'YT' : 'SC'}</span>`;
+  return `<div class="track-item" onclick="downloadTrack('${track.id}')">
+    <div class="track-thumb">
+      ${thumb(track)}
+      <div class="play-icon">
+        <svg viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21"/></svg>
+      </div>
+    </div>
+    <div class="track-info">
+      <div class="track-name">${track.title}</div>
+      <div class="track-meta">${badge} ${track.uploader} <span class="track-duration">${fmt(track.duration)}</span></div>
+    </div>
+    <div class="track-actions" onclick="event.stopPropagation()">
+      <button class="icon-btn ${inPl ? 'added' : ''}" onclick="togglePlaylist('${track.id}')" title="${inPl ? 'Удалить' : 'В плейлист'}">
+        <svg viewBox="0 0 24 24" fill="${inPl ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2">
+          ${inPl
+            ? '<path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>'
+            : '<line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>'}
+        </svg>
+      </button>
+      <button class="dl-btn" onclick="downloadTrack('${track.id}')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+          <polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+        </svg>
+        MP3
+      </button>
+    </div>
+  </div>`;
+}
+
+// ── Download ───────────────────────────────────
+function downloadTrack(id) {
+  const track = results.find(t => t.id === id) || playlist.find(t => t.id === id);
+  if (!track) return;
+  if (tg) {
+    tg.sendData(JSON.stringify({ action: 'download', track_id: id, source: track.source }));
+    showToast('⬇ Скачиваю «' + track.title.slice(0, 30) + '»...');
+  } else {
+    showToast('⬇ Запрос отправлен боту');
+  }
+}
+
+// ── Playlist ───────────────────────────────────
+function togglePlaylist(id) {
+  const track = results.find(t => t.id === id);
+  if (!track) return;
+
+  const idx = playlist.findIndex(t => t.id === id);
+  if (idx >= 0) {
+    playlist.splice(idx, 1);
+    showToast('Удалено из плейлиста');
+  } else {
+    if (playlist.length >= 50) { showToast('Плейлист заполнен (50 треков)'); return; }
+    playlist.push(track);
+    showToast('✅ Добавлено: ' + track.title.slice(0, 28));
+    // Сообщаем боту
+    if (tg) tg.sendData(JSON.stringify({ action: 'add_to_playlist', track_id: id }));
+  }
+  savePlaylist();
+  renderResults();
+  updatePlTab();
+}
+
+function clearPlaylist() {
+  if (!playlist.length) return;
+  playlist = [];
+  savePlaylist();
+  renderPlaylist();
+  updatePlTab();
+  showToast('🗑 Плейлист очищен');
+  if (tg) tg.sendData(JSON.stringify({ action: 'clear_playlist' }));
+}
+
+function removeFromPlaylist(id) {
+  playlist = playlist.filter(t => t.id !== id);
+  savePlaylist();
+  renderPlaylist();
+  updatePlTab();
+  showToast('Удалено из плейлиста');
+}
+
+function updatePlTab() {
+  document.getElementById('pl-count').textContent = playlist.length + ' треков';
+}
+
+function renderPlaylist() {
+  updatePlTab();
+  const wrap = document.getElementById('playlist-list');
+  if (!playlist.length) {
+    wrap.innerHTML = `<div class="empty">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+        <line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/>
+        <line x1="8" y1="18" x2="21" y2="18"/>
+        <line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/>
+        <line x1="3" y1="18" x2="3.01" y2="18"/>
+      </svg>
+      <p>Плейлист пуст.<br><strong>Добавь треки через поиск</strong></p>
+    </div>`;
+    return;
+  }
+
+  wrap.innerHTML = `<div class="track-list">${playlist.map((track, i) => `
+    <div class="track-item" onclick="downloadTrack('${track.id}')">
+      <div class="track-thumb">
+        ${thumb(track)}
+        <div class="play-icon">
+          <svg viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21"/></svg>
+        </div>
+      </div>
+      <div class="track-info">
+        <div class="track-name">${track.title}</div>
+        <div class="track-meta">
+          <span class="badge badge-${track.source}">${track.source === 'yt' ? 'YT' : 'SC'}</span>
+          ${track.uploader}
+          <span class="track-duration">${fmt(track.duration)}</span>
+        </div>
+      </div>
+      <div class="track-actions" onclick="event.stopPropagation()">
+        <button class="icon-btn" onclick="removeFromPlaylist('${track.id}')" title="Удалить">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/>
+            <path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/>
+          </svg>
+        </button>
+        <button class="dl-btn" onclick="downloadTrack('${track.id}')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+            <polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+          </svg>
+          MP3
+        </button>
+      </div>
+    </div>`).join('')}</div>`;
+}
+
+// ── Init ───────────────────────────────────────
+updatePlTab();
+document.getElementById('search-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter') doSearch();
+});
+</script>
+</body>
+</html>
